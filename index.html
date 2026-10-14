@@ -67,6 +67,11 @@
     </div>
   </section>
 
+  <section class="card">
+    <h2 class="bh"><span>☁ 端末間の同期</span><button id="syncBtn">設定</button></h2>
+    <p class="hint" id="syncStatus" style="margin:0"></p>
+  </section>
+
   <section class="tools">
     <button id="export">CSV出力</button>
   </section>
@@ -74,6 +79,31 @@
 
 <div id="toast" role="status" hidden></div>
 <button id="fab"aria-label="追加">＋</button>
+
+<dialog id="syncdlg">
+  <form id="syncform" method="dialog">
+    <h2>☁ 端末間の同期</h2>
+    <p class="hint" id="syncState"></p>
+    <div id="syncIn">
+      <label>メールアドレス<input type="email" name="email" autocomplete="username" inputmode="email"></label>
+      <label>パスワード(6文字以上)<input type="password" name="password" autocomplete="current-password"></label>
+      <p class="hint">スマホやパソコンで同じメールアドレス・パスワードでログインすると、データが同期されます。初めての方は「新規登録」を押してください。</p>
+      <p class="hint err" id="syncErr"></p>
+      <div class="actions">
+        <button type="button" id="syncClose">閉じる</button>
+        <button type="button" id="syncSignup">新規登録</button>
+        <button type="button" id="syncLogin" class="primary">ログイン</button>
+      </div>
+    </div>
+    <div id="syncOut" hidden>
+      <p>ログイン中: <b id="syncUser"></b></p>
+      <div class="actions">
+        <button type="button" id="syncLogout" class="danger">ログアウト</button>
+        <button type="button" id="syncClose2">閉じる</button>
+      </div>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="goaldlg">
   <form id="goalform" method="dialog">

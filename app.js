@@ -17,7 +17,8 @@ const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.g
 
 let records = [];
 try { records = JSON.parse(localStorage.getItem(KEY)) || []; } catch { records = []; }
-const save = () => localStorage.setItem(KEY, JSON.stringify(records));
+const notifyChange = () => window.kakeiboStore && window.kakeiboStore.onChange && window.kakeiboStore.onChange(); // 同期に変更を知らせる
+const save = () => { localStorage.setItem(KEY, JSON.stringify(records)); notifyChange(); };
 
 // 予算は月ごとに保存: { 'YYYY-MM': { total, cats } }。未設定の月は直前に設定した月を引き継ぐ。
 // '0000-00' は旧バージョン(全月共通)からの移行用。
@@ -184,6 +185,7 @@ $('bform').onsubmit = () => {
   $('bcats').querySelectorAll('input').forEach(i => { if (num(i.value)) b.cats[i.dataset.cat] = num(i.value); });
   budgets[ymOf(view)] = b;
   localStorage.setItem(BKEY, JSON.stringify(budgets));
+  notifyChange();
   render();
 };
 $('grid').onclick = e => {
@@ -241,7 +243,7 @@ const LEAD_DAYS = 7;
 const LKEY = 'kakeibo.bills.v1', NKEY = 'kakeibo.notified.v1';
 let bills = [];
 try { bills = JSON.parse(localStorage.getItem(LKEY)) || []; } catch { bills = []; }
-const saveBills = () => localStorage.setItem(LKEY, JSON.stringify(bills));
+const saveBills = () => { localStorage.setItem(LKEY, JSON.stringify(bills)); notifyChange(); };
 let editingBill = null;
 
 const dueIn = (y, m, day) => new Date(y, m, Math.min(day, new Date(y, m + 1, 0).getDate())); // 月末超えは月末日に
@@ -409,7 +411,7 @@ document.addEventListener('visibilitychange', () => {
 const GKEY = 'kakeibo.goals.v1';
 let goals = [];
 try { goals = JSON.parse(localStorage.getItem(GKEY)) || []; } catch { goals = []; }
-const saveGoals = () => localStorage.setItem(GKEY, JSON.stringify(goals));
+const saveGoals = () => { localStorage.setItem(GKEY, JSON.stringify(goals)); notifyChange(); };
 let editingGoal = null;
 
 // 期限日以降の目標には「支出に記録」ボタンを出し、押すと入力画面を開く(金額は直せる)。
@@ -494,6 +496,69 @@ $('goals').onclick = e => {
   else if (btn.dataset.act === 'pay') openGoalExpense(goals.find(g => g.id === id));
   else removeGoal(id);
 };
+
+// ---------- 端末間の同期 ----------
+// 同期の本体は sync.js / syncCore.js(firebase-config.js が設定されているときだけ読み込む)。
+// ここでは、データの受け渡し(bridge)と設定画面だけを持つ。
+const syncState = { user: null, status: '同期は未設定です', actions: null, on: false };
+const syncMsg = e => ({
+  'auth/invalid-credential': 'メールアドレスまたはパスワードが違います',
+  'auth/wrong-password': 'メールアドレスまたはパスワードが違います',
+  'auth/user-not-found': 'このメールアドレスは登録されていません',
+  'auth/email-already-in-use': 'このメールアドレスは登録済みです。「ログイン」を押してください',
+  'auth/weak-password': 'パスワードは6文字以上にしてください',
+  'auth/invalid-email': 'メールアドレスの形式が正しくありません',
+  'auth/network-request-failed': '通信できません。ネットワークを確認してください',
+  'auth/too-many-requests': '試行回数が多すぎます。しばらくしてからやり直してください',
+}[e && e.code] || `エラー: ${(e && (e.code || e.message)) || e}`);
+
+function renderSync() {
+  $('syncStatus').textContent = syncState.user ? `${syncState.user}・${syncState.status}` : syncState.status;
+  $('syncState').textContent = syncState.on ? syncState.status : '同期は未設定です。SYNC_SETUP.md の手順でFirebaseを設定すると使えます。';
+  $('syncIn').hidden = !syncState.on || !!syncState.user;
+  $('syncOut').hidden = !syncState.user;
+  $('syncUser').textContent = syncState.user || '';
+}
+$('syncBtn').onclick = () => { $('syncErr').textContent = ''; renderSync(); $('syncdlg').showModal(); };
+$('syncClose').onclick = $('syncClose2').onclick = () => $('syncdlg').close();
+const syncAuth = name => async () => {
+  const f = $('syncform');
+  $('syncErr').textContent = '';
+  if (!syncState.actions) return;
+  try { await syncState.actions[name](f.email.value.trim(), f.password.value); f.password.value = ''; $('syncdlg').close(); }
+  catch (e) { $('syncErr').textContent = syncMsg(e); }
+};
+$('syncLogin').onclick = syncAuth('login');
+$('syncSignup').onclick = syncAuth('signup');
+$('syncLogout').onclick = () => { if (confirm('ログアウトします。この端末のデータは残り、同期だけ止まります。')) syncState.actions.logout(); };
+
+(async () => {
+  try {
+    const cfg = (await import('./firebase-config.js')).default;
+    if (!cfg) return renderSync();
+    syncState.on = true; syncState.status = '読み込み中…'; renderSync();
+    const mod = await import('./sync.js'); // Firebase SDK をネットから読む。オフラインなら失敗してもアプリは普通に動く
+    mod.start(cfg, {
+      getData: () => ({ records, bills, goals, budgets: Object.entries(budgets).map(([id, b]) => ({ id, ...b })) }),
+      applyData: d => {
+        records = d.records; bills = d.bills; goals = d.goals;
+        budgets = Object.fromEntries(d.budgets.map(({ id, ...b }) => [id, b]));
+        localStorage.setItem(KEY, JSON.stringify(records));
+        localStorage.setItem(LKEY, JSON.stringify(bills));
+        localStorage.setItem(GKEY, JSON.stringify(goals));
+        localStorage.setItem(BKEY, JSON.stringify(budgets));
+        render(); renderBills();
+      },
+      setStatus: s => { syncState.status = s; renderSync(); },
+      setUser: u => { syncState.user = u; renderSync(); },
+      setActions: a => { syncState.actions = a; },
+      onChange: fn => { window.kakeiboStore = { onChange: fn }; },
+    });
+  } catch (e) {
+    syncState.status = 'オフラインのため同期できません(戻ったら再読み込みしてください)';
+    renderSync();
+  }
+})();
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 applyBills();

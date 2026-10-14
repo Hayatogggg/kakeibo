@@ -47,6 +47,9 @@ li.item.expected{background:linear-gradient(90deg,transparent,color-mix(in srgb,
 #bcats label{display:block;font-size:.8rem;color:var(--sub);margin-bottom:10px}
 .daysum[hidden]{display:none}
 form>label[hidden]{display:none}
+.hint.err{color:var(--out)}
+#syncIn label{display:block;font-size:.8rem;color:var(--sub);margin-bottom:10px}
+#syncIn[hidden],#syncOut[hidden]{display:none}
 .goal{padding:8px 0;border-bottom:1px solid var(--line)}
 .goal:last-child{border-bottom:0}
 .goal .bar{margin:0}
