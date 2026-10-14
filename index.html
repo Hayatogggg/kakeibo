@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2f855a">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>家計簿</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <button id="prev" aria-label="前の月">‹</button>
+  <h1 id="month"></h1>
+  <button id="next" aria-label="次の月">›</button>
+</header>
+
+<main>
+  <section id="upcoming" class="card alert" hidden></section>
+
+  <section class="summary">
+    <div><small>収入</small><b id="sumIn" class="in"></b><small id="sumExp" class="expnote" hidden></small></div>
+    <div><small>支出</small><b id="sumOut" class="out"></b><small id="sumCash" class="cashnote" hidden></small></div>
+    <div><small>収支</small><b id="sumBal"></b></div>
+  </section>
+
+  <section class="card" id="goalsCard">
+    <h2 class="bh"><span>🎯 目標</span><button id="goalAdd">追加</button></h2>
+    <div id="goals"></div>
+    <p class="hint">ゲージに反映されるのは、収入(見込み含む)と<b>現金払い</b>の支出です。カードなど現金以外の支出は引きません。カードの利用分は、引き落とし日の支出(定期の引き落とし)を現金払いで記録すると反映されます。</p>
+    <p id="goalEmpty" class="hint">旅行など、期限までに必要な金額を登録すると、収支の残高が期限の近い順に貯まっていきます。期限日になったら、支出として記録できます。</p>
+  </section>
+
+  <section class="card cal">
+    <div class="dow"><span class="sun">日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span class="sat">土</span></div>
+    <div id="grid"></div>
+  </section>
+
+  <section class="card">
+    <h2 class="bh"><span>定期の引き落とし</span><button id="billAdd">追加</button></h2>
+    <ul id="bills"></ul>
+    <p id="billEmpty" class="hint">カードや公共料金など、毎月決まった日の引き落としを登録すると、7日前からお知らせします。</p>
+    <div class="billtools">
+      <button id="notif">通知を許可</button>
+      <button id="ics">カレンダーに登録</button>
+    </div>
+    <p class="hint" id="notifHint"></p>
+  </section>
+
+  <section id="cats" class="card"></section>
+
+  <section class="card">
+    <h2 id="listTitle">明細</h2>
+    <div id="daySum" class="daysum" hidden></div>
+    <ul id="list"></ul>
+    <p id="empty" hidden>この月の記録はありません</p>
+  </section>
+
+  <section class="card total">
+    <h2 id="allTitle">これまでの合計</h2>
+    <div class="summary mini">
+      <div><small>収入</small><b id="allIn" class="in"></b></div>
+      <div><small>支出</small><b id="allOut" class="out"></b></div>
+      <div><small>収支</small><b id="allBal"></b></div>
+    </div>
+  </section>
+
+  <section class="tools">
+    <button id="export">CSV出力</button>
+  </section>
+</main>
+
+<div id="toast" role="status" hidden></div>
+<button id="fab"aria-label="追加">＋</button>
+
+<dialog id="goaldlg">
+  <form id="goalform" method="dialog">
+    <h2 id="goalTitle">目標を追加</h2>
+    <label>目標の名前<input type="text" name="name" maxlength="30" required placeholder="例: 旅行"></label>
+    <label>目標金額(円)<input type="number" name="target" inputmode="numeric" min="1" step="1" required></label>
+    <label>期限<input type="date" name="deadline" required></label>
+    <label>支出のカテゴリ<select name="category"></select></label>
+    <p class="hint">これまでの収支の残高が、期限の近い目標から順に割り当てられます。期限日以降に「支出に記録」を押すと、支出として記録できます。</p>
+    <div class="actions">
+      <button type="button" id="goalDel" class="danger" hidden>削除</button>
+      <button type="button" id="goalCancel">キャンセル</button>
+      <button type="submit" class="primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="billdlg">
+  <form id="billform" method="dialog">
+    <h2 id="billTitle">引き落としを追加</h2>
+    <label>名称<input type="text" name="name" maxlength="30" required placeholder="例: クレジットカード"></label>
+    <p class="hint">引き落とし日になると、この金額で支出に自動記録します。金額が空欄の場合は記録されません。</p>
+    <label>金額(円)<input type="number" name="amount" inputmode="numeric" min="0" step="1"></label>
+    <label>引き落とし日(毎月)<select name="day"></select></label>
+    <label>支払い方法<select name="pay"></select></label>
+    <label>カテゴリ<select name="category"></select></label>
+    <div class="actions">
+      <button type="button" id="billDel" class="danger" hidden>削除</button>
+      <button type="button" id="billCancel">キャンセル</button>
+      <button type="submit" class="primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="bdlg">
+  <form id="bform" method="dialog">
+    <h2 id="btitle">予算</h2>
+    <p class="hint">空欄または0は「予算なし」です。保存すると、この月以降は(別途設定した月を除き)この予算が引き継がれます。</p>
+    <p class="hint" id="binherit" hidden>※前の月の予算を引き継いでいます。</p>
+    <label>支出の予算(全体)<input type="number" name="total" inputmode="numeric" min="0" step="1"></label>
+    <div id="bcats"></div>
+    <div class="actions">
+      <button type="button" id="bcancel">キャンセル</button>
+      <button type="submit" class="primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg">
+  <form id="form" method="dialog">
+    <h2 id="dlgTitle">記録を追加</h2>
+    <div class="seg">
+      <label><input type="radio" name="type" value="out" checked><span>支出</span></label>
+      <label><input type="radio" name="type" value="in"><span>収入</span></label>
+      <label><input type="radio" name="type" value="exp"><span>見込収入</span></label>
+    </div>
+    <label>日付<input type="date" name="date" required></label>
+    <label>金額(円)<input type="number" name="amount" inputmode="numeric" min="1" step="1" required></label>
+    <label>カテゴリ<select name="category"></select></label>
+    <label id="payLabel">支払い方法<select name="pay"></select></label>
+    <label>メモ<input type="text" name="memo" maxlength="100"></label>
+    <div class="actions">
+      <button type="button" id="del" class="danger" hidden>削除</button>
+      <button type="button" id="cancel">キャンセル</button>
+      <button type="submit" class="primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
