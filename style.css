@@ -47,6 +47,11 @@ li.item.expected{background:linear-gradient(90deg,transparent,color-mix(in srgb,
 #bcats label{display:block;font-size:.8rem;color:var(--sub);margin-bottom:10px}
 .daysum[hidden]{display:none}
 form>label[hidden]{display:none}
+#billMonths{margin-bottom:10px}
+#billMonths label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.9rem;color:var(--text);padding:3px 0}
+#billMonths input{width:auto;margin:0}
+#billdlg,#billdlg form{max-height:90vh}
+#billdlg{overflow:auto}
 .hint.err{color:var(--out)}
 #syncIn label{display:block;font-size:.8rem;color:var(--sub);margin-bottom:10px}
 #syncIn[hidden],#syncOut[hidden]{display:none}

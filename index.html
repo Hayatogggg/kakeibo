@@ -47,6 +47,7 @@
       <button id="ics">カレンダーに登録</button>
     </div>
     <p class="hint" id="notifHint"></p>
+    <p class="hint">※カレンダー登録は、基本の日で毎月くりかえします(月ごとに直した日付は反映されません)。</p>
   </section>
 
   <section id="cats" class="card"></section>
@@ -127,7 +128,11 @@
     <label>名称<input type="text" name="name" maxlength="30" required placeholder="例: クレジットカード"></label>
     <p class="hint">引き落とし日になると、この金額で支出に自動記録します。金額が空欄の場合は記録されません。</p>
     <label>金額(円)<input type="number" name="amount" inputmode="numeric" min="0" step="1"></label>
-    <label>引き落とし日(毎月)<select name="day"></select></label>
+    <label>基本の引き落とし日(毎月)<select name="day"></select></label>
+    <div id="billMonthsBox">
+      <p class="hint">月によって日が違う場合は、その月の日付を直してください。直した月だけ、その日付で通知と自動記録をします。</p>
+      <div id="billMonths"></div>
+    </div>
     <label>支払い方法<select name="pay"></select></label>
     <label>カテゴリ<select name="category"></select></label>
     <div class="actions">

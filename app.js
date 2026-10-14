@@ -248,11 +248,20 @@ let editingBill = null;
 
 const dueIn = (y, m, day) => new Date(y, m, Math.min(day, new Date(y, m + 1, 0).getDate())); // 月末超えは月末日に
 const startOfToday = () => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); };
+const ymKey = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+// y年m月(0始まり、範囲外可)分の引き落とし日。b.dates['YYYY-MM'] があればその日付、なければ毎月の基本の日
+const dueFor = (b, y, m) => {
+  const base = new Date(y, m, 1), o = b.dates && b.dates[ymKey(base)];
+  return o ? new Date(o + 'T00:00') : dueIn(base.getFullYear(), base.getMonth(), b.day);
+};
 const nextDue = b => {
   const t = startOfToday();
-  let d = dueIn(t.getFullYear(), t.getMonth(), b.day);
-  if (d < t) d = dueIn(t.getFullYear(), t.getMonth() + 1, b.day);
-  return d;
+  let best = null;
+  for (let k = -1; k <= 2; k++) { // 日付を別の月へずらしている場合も拾えるよう前後の月を見る
+    const d = dueFor(b, t.getFullYear(), t.getMonth() + k);
+    if (d >= t && (!best || d < best)) best = d;
+  }
+  return best || dueIn(t.getFullYear(), t.getMonth() + 1, b.day);
 };
 const daysUntil = d => Math.round((d - startOfToday()) / 864e5);
 const md = d => `${d.getMonth() + 1}/${d.getDate()}`;
@@ -316,7 +325,7 @@ function applyBills() {
     const s = new Date(b.since + 'T00:00');
     let y = s.getFullYear(), m = s.getMonth();
     while (y < t.getFullYear() || (y === t.getFullYear() && m <= t.getMonth())) {
-      const d = iso(dueIn(y, m, b.day));
+      const d = iso(dueFor(b, y, m));
       if (d >= b.since && d <= today && d > (b.lastDue || '')) {
         if (!records.some(r => r.billId === b.id && r.date === d)) {
           records.push({ id: Date.now() + added, type: 'out', date: d, amount: b.amount, category: b.category, pay: payOf(b), memo: `引き落とし: ${b.name}`, billId: b.id });
@@ -351,8 +360,29 @@ function openBill(b) {
   f.amount.value = b && b.amount ? b.amount : '';
   f.day.value = b ? b.day : startOfToday().getDate();
   f.category.value = b ? b.category : '住居・光熱費';
+  billDates = { ...(b && b.dates) };
+  renderBillMonths();
   $('billdlg').showModal();
 }
+// 月ごとの引き落とし日の欄(これから6か月分)。基本の日と違う月だけ b.dates に保存する
+let billDates = {};
+function renderBillMonths() {
+  const day = +$('billform').day.value, t = startOfToday();
+  const start = dueIn(t.getFullYear(), t.getMonth(), day) >= t ? 0 : 1;
+  let html = '';
+  for (let k = start; k < start + 6; k++) {
+    const base = new Date(t.getFullYear(), t.getMonth() + k, 1), key = ymKey(base);
+    const val = billDates[key] || iso(dueIn(base.getFullYear(), base.getMonth(), day));
+    html += `<label>${base.getFullYear() === t.getFullYear() ? '' : base.getFullYear() + '年'}${base.getMonth() + 1}月分<input type="date" data-key="${key}" value="${val}"></label>`;
+  }
+  $('billMonths').innerHTML = html;
+}
+$('billform').day.onchange = renderBillMonths;
+$('billMonths').onchange = e => {
+  const i = e.target.closest('input[data-key]');
+  if (!i) return;
+  if (i.value) billDates[i.dataset.key] = i.value; else delete billDates[i.dataset.key];
+};
 $('billAdd').onclick = () => openBill();
 $('billCancel').onclick = () => $('billdlg').close();
 $('bills').onclick = e => {
@@ -370,6 +400,14 @@ $('billform').onsubmit = () => {
   const old = bills.find(x => x.id === editingBill);
   const b = { ...old, id: editingBill || Date.now(), name: f.name.value.trim(), amount: Math.max(0, Math.round(+f.amount.value || 0)), day: +f.day.value, category: f.category.value, pay: f.pay.value };
   if (!old) b.since = iso(startOfToday());
+  // 基本の日と同じ日付、または古い(2か月より前の)月の指定は保存しない
+  const t = startOfToday(), oldest = ymKey(new Date(t.getFullYear(), t.getMonth() - 2, 1));
+  b.dates = {};
+  for (const [key, v] of Object.entries(billDates)) {
+    const [y, m] = key.split('-').map(Number);
+    if (key >= oldest && v && v !== iso(dueIn(y, m - 1, b.day))) b.dates[key] = v;
+  }
+  if (!Object.keys(b.dates).length) delete b.dates;
   if (old) bills = bills.map(x => x.id === editingBill ? b : x); else bills.push(b);
   saveBills(); applyBills(); renderBills(); render(); notifyUpcoming();
 };
