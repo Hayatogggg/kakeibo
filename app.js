@@ -20,6 +20,12 @@ try { records = JSON.parse(localStorage.getItem(KEY)) || []; } catch { records =
 const notifyChange = () => window.kakeiboStore && window.kakeiboStore.onChange && window.kakeiboStore.onChange(); // 同期に変更を知らせる
 const save = () => { localStorage.setItem(KEY, JSON.stringify(records)); notifyChange(); };
 
+// よく使う記録のテンプレート: { id, name, type:'out'|'in'|'exp', amount, category, pay, memo }
+const TKEY = 'kakeibo.templates.v1';
+let templates = [];
+try { templates = JSON.parse(localStorage.getItem(TKEY)) || []; } catch { templates = []; }
+const saveTemplates = () => { localStorage.setItem(TKEY, JSON.stringify(templates)); notifyChange(); };
+
 // 予算は月ごとに保存: { 'YYYY-MM': { total, cats } }。未設定の月は直前に設定した月を引き継ぐ。
 // '0000-00' は旧バージョン(全月共通)からの移行用。
 const BKEY = 'kakeibo.budget.v2';
@@ -136,6 +142,21 @@ function render() {
     rs = rs.filter(r => r.date === selected);
   } else $('listTitle').textContent = '明細';
 
+  // 検索(全期間。空白区切りは「すべて含む」)。検索中は月・日の絞り込みより優先する
+  const q = $('q').value.trim();
+  if (q) {
+    const norm = s => String(s).normalize('NFKC').toLowerCase();
+    const toks = norm(q).split(/\s+/).filter(Boolean);
+    rs = records.filter(r => {
+      const h = norm(`${r.category} ${r.memo || ''} ${r.type === 'out' ? payOf(r) : ''} ${r.type === 'in' && r.expected ? '見込' : ''} ${r.amount}`);
+      return toks.every(t => h.includes(t));
+    }).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+    const tot = t => rs.filter(r => r.type === t).reduce((s, r) => s + r.amount, 0);
+    ds.hidden = false;
+    ds.innerHTML = `<span class="in">収入 ${yen(tot('in'))}</span><span class="out">支出 ${yen(tot('out'))}</span><b>${rs.length}件</b>`;
+    $('listTitle').textContent = '検索結果(全期間)';
+  }
+
   // 明細
   let html = '', last = '';
   const wd = '日月火水木金土';
@@ -143,7 +164,7 @@ function render() {
     if (r.date !== last) {
       last = r.date;
       const d = new Date(r.date + 'T00:00');
-      html += `<li class="day">${d.getMonth() + 1}月${d.getDate()}日(${wd[d.getDay()]})</li>`;
+      html += `<li class="day">${q ? d.getFullYear() + '年' : ''}${d.getMonth() + 1}月${d.getDate()}日(${wd[d.getDay()]})</li>`;
     }
     if (r.expectedBill) { // 引き落とし予定(見込み支出): タップで引き落とし設定を開く
       html += `<li class="item expected" data-bill="${r.billId}"><span class="ic">${icon('out', r.category)}</span><div class="t">${esc(r.category)} <small class="exp">予定</small><span>${esc(r.pay + '・' + r.memo)}</span></div><b class="out exp">-${yen(r.amount)}</b></li>`;
@@ -154,7 +175,9 @@ function render() {
   }
   $('list').innerHTML = html;
   $('empty').hidden = rs.length > 0;
+  $('empty').textContent = q ? '該当する記録はありません' : selected ? 'この日の記録はありません' : 'この月の記録はありません';
 }
+$('q').oninput = render;
 
 function fillCats(type, selected) {
   $('form').category.innerHTML = CATS[type === 'exp' ? 'in' : type].map(c => `<option${c[0] === selected ? ' selected' : ''}>${c[0]}</option>`).join('');
@@ -174,8 +197,55 @@ function openDialog(rec) {
   f.memo.value = rec ? rec.memo : '';
   f.pay.innerHTML = payOptions(rec && rec.type === 'out' ? payOf(rec) : '現金');
   $('payLabel').hidden = type !== 'out';
+  renderTpls();
   $('dlg').showModal();
 }
+
+// ---------- テンプレート ----------
+const tplType = t => t === 'in' ? '収入' : t === 'exp' ? '見込収入' : '支出';
+function renderTpls() {
+  const row = $('tplRow');
+  row.hidden = editingId !== null || !templates.length; // 新規入力のときだけ表示
+  row.innerHTML = '<small>テンプレート</small>' + templates.map(t =>
+    `<button type="button" class="chip" data-id="${t.id}">${icon(t.type === 'exp' ? 'in' : t.type, t.category)} ${esc(t.name)}${t.amount ? ' ' + yen(t.amount) : ''}</button>`).join('');
+}
+$('tplRow').onclick = e => {
+  const b = e.target.closest('.chip');
+  const t = b && templates.find(x => x.id === +b.dataset.id);
+  if (!t) return;
+  const f = $('form');
+  document.querySelector(`input[name=type][value=${t.type}]`).checked = true;
+  fillCats(t.type, t.category);
+  $('payLabel').hidden = t.type !== 'out';
+  if (t.type === 'out') f.pay.innerHTML = payOptions(t.pay || '現金');
+  f.amount.value = t.amount || '';
+  f.memo.value = t.memo || '';
+  f.amount.focus(); // 日付はそのまま。金額を変えたいときはすぐ直せる
+};
+$('tplSave').onclick = () => {
+  const f = $('form'), type = f.type.value, memo = f.memo.value.trim();
+  templates.push({ id: Date.now(), name: memo || f.category.value, type, amount: Math.round(+f.amount.value) || 0, category: f.category.value, pay: type === 'out' ? f.pay.value : '', memo });
+  saveTemplates(); renderTpls(); toast('テンプレートに保存しました');
+};
+function renderTplList() {
+  $('tplList').innerHTML = templates.length ? templates.map(t =>
+    `<div class="trow" data-id="${t.id}"><input type="text" value="${esc(t.name)}" maxlength="30" aria-label="テンプレート名"><small>${tplType(t.type)}・${esc(t.category)}${t.amount ? '・' + yen(t.amount) : ''}</small><button type="button" data-act="del">削除</button></div>`).join('')
+    : '<p class="hint">テンプレートはまだありません。記録の入力画面で「この内容をテンプレートに保存」を押すと追加できます。</p>';
+}
+$('tplManage').onclick = () => { renderTplList(); $('tpldlg').showModal(); };
+$('tplClose').onclick = () => { $('tpldlg').close(); renderTpls(); };
+$('tplList').onchange = e => {
+  const row = e.target.closest('.trow');
+  if (!row || !e.target.matches('input')) return;
+  templates = templates.map(t => t.id === +row.dataset.id ? { ...t, name: e.target.value.trim() || t.name } : t);
+  saveTemplates();
+};
+$('tplList').onclick = e => {
+  const row = e.target.closest('.trow');
+  if (!row || e.target.dataset.act !== 'del') return;
+  templates = templates.filter(t => t.id !== +row.dataset.id);
+  saveTemplates(); renderTplList();
+};
 
 document.querySelectorAll('input[name=type]').forEach(r => r.addEventListener('change', e => {
   fillCats(e.target.value);
@@ -617,9 +687,10 @@ $('syncLogout').onclick = () => { if (confirm('ログアウトします。この
     syncState.on = true; syncState.status = '読み込み中…'; renderSync();
     const mod = await import('./sync.js'); // Firebase SDK をネットから読む。オフラインなら失敗してもアプリは普通に動く
     mod.start(cfg, {
-      getData: () => ({ records, bills, goals, budgets: Object.entries(budgets).map(([id, b]) => ({ id, ...b })) }),
+      getData: () => ({ records, bills, goals, templates, budgets: Object.entries(budgets).map(([id, b]) => ({ id, ...b })) }),
       applyData: d => {
-        records = d.records; bills = d.bills; goals = d.goals;
+        records = d.records; bills = d.bills; goals = d.goals; templates = d.templates || [];
+        localStorage.setItem(TKEY, JSON.stringify(templates));
         budgets = Object.fromEntries(d.budgets.map(({ id, ...b }) => [id, b]));
         localStorage.setItem(KEY, JSON.stringify(records));
         localStorage.setItem(LKEY, JSON.stringify(bills));

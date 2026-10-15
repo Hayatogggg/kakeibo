@@ -48,6 +48,20 @@ li.item.expected{background:linear-gradient(90deg,transparent,color-mix(in srgb,
 #bcats label{display:block;font-size:.8rem;color:var(--sub);margin-bottom:10px}
 .daysum[hidden]{display:none}
 form>label[hidden]{display:none}
+.tpls{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:12px}
+.tpls[hidden]{display:none}
+.tpls small{color:var(--sub);width:100%}
+.chip{border:1px solid var(--main);background:none;color:var(--main);border-radius:999px;padding:6px 12px;font:inherit;font-size:.85rem}
+.chip:active{background:var(--main);color:#fff}
+.tplbtns{display:flex;gap:8px;margin:4px 0 8px}
+.tplbtns button{border:0;background:none;color:var(--main);font:inherit;font-size:.8rem;padding:4px 0}
+.tplbtns button:last-child{margin-left:auto;color:var(--sub)}
+.trow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line)}
+.trow input{flex:1 1 140px;margin:0}
+.trow small{color:var(--sub);flex:1 1 100%;order:3}
+.trow button{border:0;background:none;color:var(--out);font:inherit;font-size:.85rem}
+#q{margin:0 0 8px}
+#tpldlg{max-height:90vh;overflow:auto}
 #billMonths{margin-bottom:10px}
 #billMonths label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.9rem;color:var(--text);padding:3px 0}
 #billMonths input{width:auto;margin:0}

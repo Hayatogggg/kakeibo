@@ -54,6 +54,7 @@
 
   <section class="card">
     <h2 id="listTitle">明細</h2>
+    <input type="search" id="q" placeholder="🔍 メモ・カテゴリで検索(全期間)" enterkeyhint="search" autocomplete="off">
     <div id="daySum" class="daysum" hidden></div>
     <ul id="list"></ul>
     <p id="empty" hidden>この月の記録はありません</p>
@@ -81,6 +82,13 @@
 
 <div id="toast" role="status" hidden></div>
 <button id="fab"aria-label="追加">＋</button>
+
+<dialog id="tpldlg">
+  <h2>テンプレートの管理</h2>
+  <p class="hint">名前は、直接書き換えられます。</p>
+  <div id="tplList"></div>
+  <div class="actions"><button type="button" id="tplClose" class="primary">閉じる</button></div>
+</dialog>
 
 <dialog id="syncdlg">
   <form id="syncform" method="dialog">
@@ -161,6 +169,7 @@
 <dialog id="dlg">
   <form id="form" method="dialog">
     <h2 id="dlgTitle">記録を追加</h2>
+    <div id="tplRow" class="tpls" hidden></div>
     <div class="seg">
       <label><input type="radio" name="type" value="out" checked><span>支出</span></label>
       <label><input type="radio" name="type" value="in"><span>収入</span></label>
@@ -171,6 +180,10 @@
     <label>カテゴリ<select name="category"></select></label>
     <label id="payLabel">支払い方法<select name="pay"></select></label>
     <label>メモ<input type="text" name="memo" maxlength="100"></label>
+    <div class="tplbtns">
+      <button type="button" id="tplSave">☆ この内容をテンプレートに保存</button>
+      <button type="button" id="tplManage">管理</button>
+    </div>
     <div class="actions">
       <button type="button" id="del" class="danger" hidden>削除</button>
       <button type="button" id="cancel">キャンセル</button>

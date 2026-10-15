@@ -4,7 +4,7 @@
 //  - この端末で削除した項目 → クラウドに「削除済み(_d)」を書く
 //  - この端末で触っていない項目 → クラウドの内容を取り込む(新しい _u のものを優先)
 // 別々の端末で追加した記録はどちらも残る。同じ項目を両方で編集した場合だけ、後から同期した方が勝つ。
-export const COLS = ['records', 'bills', 'goals', 'budgets'];
+export const COLS = ['records', 'bills', 'goals', 'budgets', 'templates'];
 
 const stable = v => v && typeof v === 'object'
   ? Array.isArray(v) ? '[' + v.map(stable).join(',') + ']'
