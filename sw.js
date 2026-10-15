@@ -1,4 +1,4 @@
-const CACHE = 'kakeibo-v15';
+const CACHE = 'kakeibo-v16';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'syncCore.js', 'sync.js', 'firebase-config.js', 'manifest.json', 'icon.svg'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
@@ -16,5 +16,11 @@ self.addEventListener('fetch', e => {
     return;
   }
   if (url.origin !== location.origin) return;
-  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+  // アプリ本体: ネット優先(更新がすぐ反映される)、オフラインなら保存済みの版を使う
+  e.respondWith(
+    fetch(e.request, { cache: 'no-cache' }).then(r => {
+      if (r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
+      return r;
+    }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('index.html')))
+  );
 });
