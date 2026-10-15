@@ -22,14 +22,14 @@
 
   <section class="summary">
     <div><small>収入</small><b id="sumIn" class="in"></b><small id="sumExp" class="expnote" hidden></small></div>
-    <div><small>支出</small><b id="sumOut" class="out"></b><small id="sumCash" class="cashnote" hidden></small></div>
+    <div><small>支出</small><b id="sumOut" class="out"></b><small id="sumCash" class="cashnote" hidden></small><small id="sumEOut" class="expnote" hidden></small></div>
     <div><small>収支</small><b id="sumBal"></b></div>
   </section>
 
   <section class="card" id="goalsCard">
     <h2 class="bh"><span>🎯 目標</span><button id="goalAdd">追加</button></h2>
     <div id="goals"></div>
-    <p class="hint">ゲージに反映されるのは、収入(見込み含む)と<b>現金払い</b>の支出です。カードなど現金以外の支出は引きません。カードの利用分は、引き落とし日の支出(定期の引き落とし)を現金払いで記録すると反映されます。</p>
+    <p class="hint">ゲージに反映されるのは、収入(見込み含む)と<b>現金払い</b>の支出(今月末までの現金の引き落とし予定を含む)です。カードなど現金以外の支出は引きません。カードの利用分は、引き落とし日の支出(定期の引き落とし)を現金払いで記録すると反映されます。</p>
     <p id="goalEmpty" class="hint">旅行など、期限までに必要な金額を登録すると、収支の残高が期限の近い順に貯まっていきます。期限日になったら、支出として記録できます。</p>
   </section>
 
@@ -66,6 +66,7 @@
       <div><small>支出</small><b id="allOut" class="out"></b></div>
       <div><small>収支</small><b id="allBal"></b></div>
     </div>
+    <p class="hint" id="allNote" style="margin:6px 0 0" hidden></p>
   </section>
 
   <section class="card">

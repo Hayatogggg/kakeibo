@@ -47,7 +47,10 @@ const esc = s => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',
 function render() {
   const ym = ymOf(view);
   $('month').textContent = `${view.getFullYear()}年${view.getMonth() + 1}月`;
-  let rs = records.filter(r => r.date.startsWith(ym)).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  const monthEnd = iso(new Date(view.getFullYear(), view.getMonth() + 1, 0));
+  // 見込み支出(引き落とし予定)も月の記録として混ぜる。実際の記録ではない仮の項目で、引き落とし日に本当の支出として記録される
+  let rs = [...records.filter(r => r.date.startsWith(ym)), ...expectedBills(monthEnd).filter(r => r.date.startsWith(ym))]
+    .sort((a, b) => b.date.localeCompare(a.date) || (b.id || 0) - (a.id || 0));
   const monthRs = rs;
   const sum = t => monthRs.filter(r => r.type === t).reduce((s, r) => s + r.amount, 0);
   const inc = sum('in'), out = sum('out');
@@ -58,6 +61,9 @@ function render() {
   const expSum =monthRs.filter(r => r.type === 'in' && r.expected).reduce((s, r) => s + r.amount, 0);
   $('sumExp').hidden = !expSum;
   $('sumExp').textContent = `うち見込 ${yen(expSum)}`;
+  const eOut = monthRs.filter(r => r.expectedBill).reduce((s, r) => s + r.amount, 0);
+  $('sumEOut').hidden = !eOut;
+  $('sumEOut').textContent = `うち見込 ${yen(eOut)}`;
   $('sumOut').textContent = yen(out);
   const bal = $('sumBal');
   bal.textContent = (inc - out < 0 ? '-' : '') + yen(Math.abs(inc - out));
@@ -67,7 +73,12 @@ function render() {
 
   // これまでの合計(全期間)
   const allIn = records.filter(r => r.type === 'in').reduce((s, r) => s + r.amount, 0);
-  const allOut = records.filter(r => r.type === 'out').reduce((s, r) => s + r.amount, 0);
+  // 今月末までの引き落とし予定(見込み支出)も含める
+  const today0 = startOfToday();
+  const expAllOut = expectedBills(iso(new Date(today0.getFullYear(), today0.getMonth() + 1, 0))).reduce((s, r) => s + r.amount, 0);
+  $('allNote').hidden = !expAllOut;
+  $('allNote').textContent = `今月末までの引き落とし予定 ${yen(expAllOut)} を支出に含みます`;
+  const allOut = records.filter(r => r.type === 'out').reduce((s, r) => s + r.amount, 0) + expAllOut;
   $('allIn').textContent = yen(allIn);
   $('allOut').textContent = yen(allOut);
   $('allBal').textContent = (allIn - allOut < 0 ? '-' : '') + yen(Math.abs(allIn - allOut));
@@ -96,7 +107,7 @@ function render() {
 
   // カレンダー
   const dayTot = {};
-  rs.forEach(r => { const t = dayTot[r.date] || (dayTot[r.date] = { in: 0, out: 0, exp: 0 }); t[r.type === 'in' && r.expected ? 'exp' : r.type] += r.amount; });
+  rs.forEach(r => { const t = dayTot[r.date] || (dayTot[r.date] = { in: 0, out: 0, exp: 0, eout: 0 }); t[r.expectedBill ? 'eout' : r.type === 'in' && r.expected ? 'exp' : r.type] += r.amount; });
   const first = new Date(view.getFullYear(), view.getMonth(), 1).getDay();
   const days = new Date(view.getFullYear(), view.getMonth() + 1, 0).getDate();
   if (selected && !selected.startsWith(ym)) selected = null;
@@ -106,7 +117,8 @@ function render() {
     g += `<button class="cell${ds === today() ? ' today' : ''}${ds === selected ? ' sel' : ''}" data-date="${ds}"><span class="d">${d}</span>` +
       (t && t.in ? `<span class="a in">+${short(t.in)}</span>` : '') +
       (t && t.exp ? `<span class="a exp">~${short(t.exp)}</span>` : '') +
-      (t && t.out ? `<span class="a out">-${short(t.out)}</span>` : '') + '</button>';
+      (t && t.out ? `<span class="a out">-${short(t.out)}</span>` : '') +
+      (t && t.eout ? `<span class="a exp">~-${short(t.eout)}</span>` : '') + '</button>';
   }
   $('grid').innerHTML = g;
 
@@ -114,10 +126,11 @@ function render() {
   const ds = $('daySum');
   ds.hidden = !selected;
   if (selected) {
-    const t = dayTot[selected] || { in: 0, out: 0, exp: 0 };
-    const net = t.in + t.exp - t.out;
+    const t = dayTot[selected] || { in: 0, out: 0, exp: 0, eout: 0 };
+    const net = t.in + t.exp - t.out - t.eout;
     ds.innerHTML = `<span class="in">収入 ${yen(t.in)}</span>` + (t.exp ? `<span class="exp">見込 ${yen(t.exp)}</span>` : '') +
-      `<span class="out">支出 ${yen(t.out)}</span><b>収支 ${net < 0 ? '-' : ''}${yen(Math.abs(net))}</b>`;
+      `<span class="out">支出 ${yen(t.out)}</span>` + (t.eout ? `<span class="exp">見込支出 ${yen(t.eout)}</span>` : '') +
+      `<b>収支 ${net < 0 ? '-' : ''}${yen(Math.abs(net))}</b>`;
     const d = new Date(selected + 'T00:00');
     $('listTitle').textContent = `${d.getMonth() + 1}月${d.getDate()}日の明細`;
     rs = rs.filter(r => r.date === selected);
@@ -131,6 +144,10 @@ function render() {
       last = r.date;
       const d = new Date(r.date + 'T00:00');
       html += `<li class="day">${d.getMonth() + 1}月${d.getDate()}日(${wd[d.getDay()]})</li>`;
+    }
+    if (r.expectedBill) { // 引き落とし予定(見込み支出): タップで引き落とし設定を開く
+      html += `<li class="item expected" data-bill="${r.billId}"><span class="ic">${icon('out', r.category)}</span><div class="t">${esc(r.category)} <small class="exp">予定</small><span>${esc(r.pay + '・' + r.memo)}</span></div><b class="out exp">-${yen(r.amount)}</b></li>`;
+      continue;
     }
     const ex = r.type === 'in' && r.expected;
     html += `<li class="item${ex ? ' expected' : ''}" data-id="${r.id}"><span class="ic">${icon(r.type, r.category)}</span><div class="t">${esc(r.category)}${ex ? ' <small class="exp">見込</small>' : ''}<span>${esc(r.type === 'out' ? payOf(r) + (r.memo ? '・' + r.memo : '') : r.memo || '')}</span></div><b class="${r.type}${ex ? ' exp' : ''}">${r.type === 'in' ? '+' : '-'}${yen(r.amount)}</b></li>`;
@@ -196,7 +213,9 @@ $('grid').onclick = e => {
 };
 $('list').onclick = e => {
   const li = e.target.closest('.item');
-  if (li) openDialog(records.find(r => r.id === +li.dataset.id));
+  if (!li) return;
+  if (li.dataset.bill) openBill(bills.find(b => b.id === +li.dataset.bill));
+  else openDialog(records.find(r => r.id === +li.dataset.id));
 };
 $('del').onclick = () => {
   if (confirm('この記録を削除しますか?')) {
@@ -348,6 +367,25 @@ function toast(msg) {
   toast.t = setTimeout(() => el.hidden = true, 4000);
 }
 
+// これから来る引き落とし予定(金額ありのもの)を、見込み支出の仮の項目として返す(to=この日まで)。
+// 実際の記録ではなく、表示と集計のためだけ。引き落とし日(今日を含む)になると applyBills が本当の支出にする。
+function expectedBills(to) {
+  const t = startOfToday(), today = iso(t), toD = new Date(to + 'T00:00'), list = [], seen = new Set();
+  if (toD > new Date(t.getFullYear() + 3, t.getMonth(), 1)) return list;
+  for (const b of bills) {
+    if (!b.amount) continue;
+    for (let k = -1; ; k++) {
+      const base = new Date(t.getFullYear(), t.getMonth() + k, 1);
+      if (base > new Date(toD.getFullYear(), toD.getMonth() + 1, 1)) break; // 日付を翌月へずらした分まで見る
+      const d = iso(dueFor(b, base.getFullYear(), base.getMonth()));
+      if (d <= today || d > to || d <= (b.lastDue || '') || seen.has(b.id + '|' + d)) continue;
+      seen.add(b.id + '|' + d);
+      list.push({ expectedBill: true, billId: b.id, type: 'out', date: d, amount: b.amount, category: b.category, pay: payOf(b), memo: `引き落とし予定: ${b.name}` });
+    }
+  }
+  return list;
+}
+
 function openBill(b) {
   const f = $('billform');
   editingBill = b ? b.id : null;
@@ -473,7 +511,9 @@ function renderGoals() {
   $('goalEmpty').hidden = goals.length > 0;
 
   // ゲージの元になる残高 = 収入(見込み含む) - 現金払いの支出(カード等は引かない)
-  let pool = Math.max(0, records.reduce((s, r) => s + (r.type === 'in' ? r.amount : payOf(r) === '現金' ? -r.amount : 0), 0));
+  // 今月末までの現金払いの引き落とし予定(見込み支出)も、残高から引く
+  const eCash = expectedBills(iso(new Date(t.getFullYear(), t.getMonth() + 1, 0))).filter(r => payOf(r) === '現金').reduce((s, r) => s + r.amount, 0);
+  let pool = Math.max(0, records.reduce((s, r) => s + (r.type === 'in' ? r.amount : payOf(r) === '現金' ? -r.amount : 0), 0) - eCash);
   let html = active.map(g => {
     const dl = new Date(g.deadline + 'T00:00'), days = Math.round((dl - t) / 864e5);
     const alloc = Math.min(g.target, pool); pool -= alloc;
